@@ -8,22 +8,38 @@ jobs:
   release-build-windows:
     uses: ./.github/workflows/windows.yml
 
+  release-build-linux-ubuntu:
+    uses: ./.github/workflows/linux-ubuntu.yml
+
   release-build-manual:
     uses: ./.github/workflows/latex.yml
 
   attach-to-release:
-    needs: [release-build-windows, release-build-manual]
+    needs:
+      - release-build-windows
+      - release-build-linux-ubuntu
+      - release-build-manual
     runs-on: ubuntu-latest
+
     steps:
-    - uses: actions/download-artifact@v4
-    - name: Create versioned zip
-      run: |
-        VERSION="${{ github.event.release.tag_name }}"
-        VERSION_NO_V="${VERSION#v}"
-        cd windows
-        zip -r ../windows-$VERSION_NO_V.zip .
-    - uses: softprops/action-gh-release@v2
-      with:
-        files: |
-          windows-*.zip
-          manual/tracy.pdf
+      - uses: actions/download-artifact@v4
+
+      - name: Create versioned archives
+        run: |
+          VERSION="${{ github.event.release.tag_name }}"
+          VERSION_NO_V="${VERSION#v}"
+
+          cd windows
+          zip -r ../windows-${VERSION_NO_V}.zip .
+          cd ..
+
+          cd ubuntu-linux
+          tar -czf ../linux-ubuntu-${VERSION_NO_V}.zip .
+          cd ..
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            windows-*.zip
+            linux-ubuntu-*.zip
+            manual/tracy.pdf
