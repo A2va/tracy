@@ -13,7 +13,7 @@ env:
 jobs:
   build-linux-ubuntu:
     runs-on: ubuntu-latest
-
+    container: ubuntu:26.04
     steps:
       - uses: actions/checkout@v4
 
@@ -48,8 +48,7 @@ jobs:
         run: |
           cmake -B profiler/build -S profiler \
             -DCMAKE_BUILD_TYPE=Release \
-            -DGIT_REV=${{ github.sha }} \
-            -DLEGACY=ON
+            -DGIT_REV=${{ github.sha }}
           cmake --build profiler/build --parallel
 
       - name: Update utility
