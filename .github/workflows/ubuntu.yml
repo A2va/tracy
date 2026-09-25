@@ -1,0 +1,140 @@
+name: linux-ubuntu
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+env:
+  CPM_SOURCE_CACHE: ${{ github.workspace }}/cpm-cache
+
+jobs:
+  build-linux-ubuntu:
+    runs-on: ubuntu-latest
+    container: ubuntu:26.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install -y \
+            build-essential \
+            cmake \
+            meson \
+            ninja-build \
+            git \
+            pkg-config \
+            libfreetype6-dev \
+            libwayland-dev \
+            wayland-protocols \
+            libdbus-1-dev \
+            libxkbcommon-dev \
+            libgl1-mesa-dev \
+            libssl-dev \
+            nodejs \
+            lua5.4 \
+            libdebuginfod-dev \
+            libdw-dev \
+            libunwind-dev \
+
+      - name: Cache CPM packages
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CPM_SOURCE_CACHE }}
+          key: ubuntu-cpm-${{ hashFiles('**/vendor.cmake', '**/CMakeLists.txt') }}
+          restore-keys: |
+            ubuntu-cpm-
+
+      - name: Profiler GUI
+        run: |
+          cmake -B profiler/build -S profiler -DCMAKE_BUILD_TYPE=Release -DGIT_REV=${{ github.sha }}
+          if [ "${ACT:-}" != "true" ] && [ "${FORGEJO_ACTIONS:-}" != "true" ]; then
+            cmake --build profiler/build
+          else
+            cmake --build profiler/build --parallel
+          fi
+
+      - name: Update utility
+        run: |
+          cmake -B update/build -S update \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DGIT_REV=${{ github.sha }}
+          cmake --build update/build --parallel
+
+      - name: Capture utility
+        run: |
+          cmake -B capture/build -S capture \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DGIT_REV=${{ github.sha }}
+          cmake --build capture/build --parallel
+
+      - name: Csvexport utility
+        run: |
+          cmake -B csvexport/build -S csvexport \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DGIT_REV=${{ github.sha }}
+          cmake --build csvexport/build --parallel
+
+      - name: Import utilities
+        run: |
+          cmake -B import/build -S import \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DGIT_REV=${{ github.sha }}
+          cmake --build import/build --parallel
+
+      - name: Merge utility
+        run: |
+          cmake -B merge/build -S merge \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DGIT_REV=${{ github.sha }}
+          cmake --build merge/build --parallel
+
+      - name: Monitor utility
+        run: |
+          cmake -B monitor/build -S monitor \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DGIT_REV=${{ github.sha }}
+          cmake --build monitor/build --parallel
+
+      - name: Library (cmake)
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DTRACY_ENABLE=ON
+          cmake --build build --parallel
+          cmake --install build
+        env:
+          CMAKE_INSTALL_PREFIX: ${{ github.workspace }}/bin
+
+      - name: Library (meson)
+        run: |
+          meson setup \
+            -Dprefix=$GITHUB_WORKSPACE/bin/lib \
+            -Dtracy_enable=true \
+            build-meson
+          meson compile -C build-meson
+
+      - name: Test application
+        uses: ./.github/actions/test-tracy
+
+      - name: Find Artifacts
+        run: |
+          mkdir -p bin
+          cp profiler/build/tracy-profiler bin
+          cp update/build/tracy-update bin
+          cp capture/build/tracy-capture bin
+          cp capture/build/tracy-capture-daemon bin
+          cp csvexport/build/tracy-csvexport bin
+          cp import/build/tracy-import-chrome bin
+          cp import/build/tracy-import-fuchsia bin
+          cp merge/build/tracy-merge bin
+          cp monitor/build/tracy-monitor bin
+          strip bin/tracy-*
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ubuntu-linux
+          path: bin

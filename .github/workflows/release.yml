@@ -18,6 +18,9 @@ jobs:
   release-build-macos:
     uses: ./.github/workflows/macos.yml
 
+  release-build-linux-ubuntu:
+    uses: ./.github/workflows/ubuntu.yml
+
   release-build-manual:
     uses: ./.github/workflows/latex.yml
 
@@ -28,7 +31,7 @@ jobs:
     uses: ./.github/workflows/linux-cli.yml
 
   attach-to-release:
-    needs: [release-build-windows, release-build-macos, release-build-manual, release-build-appimage, release-build-linux-cli]
+    needs: [release-build-windows, release-build-macos, release-build-linux-ubuntu, release-build-manual, release-build-appimage, release-build-linux-cli]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -56,10 +59,17 @@ jobs:
         cp linux-cli/* linux/
         cd linux
         zip -r ../linux-$VERSION_NO_V.zip .
+    - name: Create versioned Ubuntu zip
+      run: |
+        VERSION="${{ github.event.release.tag_name }}"
+        VERSION_NO_V="${VERSION#v}"
+        cd ubuntu-linux
+        zip -r ../linux-ubuntu-$VERSION_NO_V.zip .
     - uses: softprops/action-gh-release@v2
       with:
         files: |
           windows-*.zip
           macos-*.zip
           linux-*.zip
+          linux-ubuntu-*.zip
           manual/tracy.pdf
